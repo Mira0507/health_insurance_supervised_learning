@@ -4,7 +4,6 @@ library(rpart)
 library(randomForest)
 library(pROC)
 library(ggplot2)
-library(ggrepel)
 library(formattable)
 
 g <- glimpse
@@ -16,6 +15,7 @@ dc <- read_csv("psam_p11.csv")
 md <- read_csv("psam_md.csv") 
 
 
+#################### PRIMARY DATA CLEANING #############################
 
 # converting numeric to categorical values
 ENG_d <- data.frame(ENG = 1:4, 
@@ -112,11 +112,7 @@ dc1 <- clean_func1(dc)
 
 
 
-
-
-
-
-
+########################## PREDICTIONS #############################
 
 
 ######### train_data = md1, test_data = dc1
@@ -246,6 +242,12 @@ insurance_rforest_accuracy <- mean(randomforest_prediction(md1,
                                                            dc1) == dc1$Health_Insurance_Covered)
 
 
+
+
+
+
+###################### ACCURACY EVALUATION ##########################
+
 # cleaning for comparing accuracy of each prediction 
 Model <- c(rep("Logistic Regression", times = 3), 
            rep("Naive Bayes", times = 3),
@@ -282,6 +284,13 @@ pred_table <- data.frame(Model = Model,
                                                 "Classification Tree",
                                                 "Random Forest"))) %>%
         spread(Model, Accuracy)
+
+
+
+
+
+
+########################## AUC EVALUATION ###############################
 
 # function converting categorical to numeric (yes to 1, no to 0) 
 # vec is a categorical variable
@@ -368,7 +377,6 @@ insurance_rforest_auc <- insurance_auc(randomforest_prediction(md1,
                                                            md1$HICOV, 
                                                            dc1))
 
-
 # data cleaning for AUC table
 AUC <- c(work_logistic_auc, 
          private_logistic_auc, 
@@ -396,17 +404,150 @@ AUC_table <- data.frame(Model = Model,
                                                 "Random Forest"))) %>%
         spread(Model, AUC)
 
-# plotting 
+# data cleaning for plotting  
 
 
 
 
+########################### DATA PRESENTATION ################################
+
+# data cleaning 
+
+dc_cat <- list(w = dc1$Work_Insurance, 
+               p = dc1$Private_Insurance, 
+               i = dc1$Health_Insurance_Covered,
+               eng = dc1$English,
+               edu = dc1$Education)
+md_cat <- list(w = md1$Work_Insurance,
+               p = md1$Private_Insurance,
+               i = md1$Health_Insurance_Covered,
+               eng = md1$English,
+               edu = md1$Education)
+
+ins <- c("w", "p", "i")
+e <- c("eng", "edu")
+
+make_table <- function(lst, ins, q) { 
+        df <- dc1
+        for (x in ins) {
+                a <- unlist(lst[x])
+                b <- unlist(lst[q])
+                df1 <- as.data.frame(table(a, b)) %>%
+                        mutate(Insurance = x)
+                if (identical(df, dc1)) {
+                        df <- df1
+                } else {
+                        df <- rbind(df, df1)
+                }
+                
+        }
+        return(df)
+        }
 
 
-# final accuracy table presentation
+
+table_cleaning <- function(df, tit) {
+        names(df) <- c("Coverage", tit, "Population", "Insurance", "State")
+        df1 <- df %>% 
+                mutate(Insurance = recode(Insurance,
+                                          w = "Work",
+                                          p = "Private",
+                                          i = "Work, Private, or Other")) %>%
+                mutate(Insurance = factor(Insurance, 
+                                          levels = c("Work",
+                                                     "Private",
+                                                     "Work, Private, or Other")),
+                       State = factor(State, 
+                                      levels = c("MD", "DC")))
+        
+        return(df1)
+}
+
+
+dc_english <- make_table(dc_cat, ins, "eng") %>%
+        mutate(State = "DC")
+md_english <- make_table(md_cat, ins, "eng") %>%
+        mutate(State = "MD")
+dc_education <- make_table(dc_cat, ins, "edu") %>% 
+        mutate(State = "DC")
+md_education <- make_table(md_cat, ins, "edu") %>%
+        mutate(State = "MD")
+        
+english <- rbind(dc_english, md_english)
+education <- rbind(dc_education, md_education)
+
+english1 <- table_cleaning(english, "English")
+education1 <- table_cleaning(education, "Education")
+
+
+# final accuracy and auc ables presentation
 
 pred_table_vis <- formattable(pred_table, 
-                              list(area(col = 2:5) ~ color_tile("white", "lightpink")))
+                              list(area(col = 2:5) ~ 
+                                           color_tile("white", "lightpink")))
 
 AUC_table_vis <- formattable(AUC_table, 
-                             list(area(col = 2:5) ~ color_tile("white", "#FFCC66")))
+                             list(area(col = 2:5) ~ 
+                                          color_tile("white", "#FFCC66")))
+
+# final population plots (sample size presentation)
+
+english_sample_size_plot <-
+        ggplot(english1, aes(x = English, 
+                             y = Population, 
+                             fill = Coverage)) +
+        geom_bar(stat = "identity", width = 0.8) + 
+        facet_grid(State ~ Insurance) + 
+        theme_bw() +
+        theme(axis.text = element_text(size = 10),
+              strip.text = element_text(size = 12)) +
+        ggtitle("Population Size: English Level") +
+        ylab("Population") +
+        xlab("English Level") 
+
+education_sample_size_plot <-
+        ggplot(education1, aes(x = Education, 
+                             y = Population, 
+                             fill = Coverage)) +
+        geom_bar(stat = "identity", width = 0.8) + 
+        facet_grid(State ~ Insurance) + 
+        theme_bw() +
+        theme(axis.text = element_text(size = 10),
+              strip.text = element_text(size = 12),
+              axis.text.x = element_blank()) +
+        ggtitle("Population Size: Education Level") +
+        ylab("Population") +
+        xlab("Education Attainment: No Schooling (Left) to Doctorate Degree (Right)") 
+
+
+english_proportion_plot <-
+        ggplot(english1, aes(x = English, 
+                             y = Population, 
+                             fill = Coverage)) +
+        geom_bar(stat = "identity", 
+                 width = 0.8, 
+                 position = "fill") + 
+        facet_grid(State ~ Insurance) + 
+        theme_bw() +
+        theme(axis.text = element_text(size = 10),
+              strip.text = element_text(size = 12)) +
+        ggtitle("Proportion: English Level") +
+        ylab("Proportion") +
+        xlab("English Level") 
+
+
+education_proportion_plot <-
+        ggplot(education1, aes(x = Education, 
+                               y = Population, 
+                               fill = Coverage)) +
+        geom_bar(stat = "identity", 
+                 width = 0.8,
+                 position = "fill") + 
+        facet_grid(State ~ Insurance) + 
+        theme_bw() +
+        theme(axis.text = element_text(size = 10),
+              strip.text = element_text(size = 12),
+              axis.text.x = element_blank()) +
+        ggtitle("Proportion: Education Level") +
+        ylab("Proportion") +
+        xlab("Education Attainment: No Schooling (Left) to Doctorate Degree (Right)")
