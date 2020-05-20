@@ -501,7 +501,7 @@ english_sample_size_plot <-
         theme_bw() +
         theme(axis.text = element_text(size = 10),
               strip.text = element_text(size = 12)) +
-        ggtitle("Population Size: English Level") +
+        ggtitle("Sample Size: English Level") +
         ylab("Population") +
         xlab("English Level") 
 
@@ -515,7 +515,7 @@ education_sample_size_plot <-
         theme(axis.text = element_text(size = 10),
               strip.text = element_text(size = 12),
               axis.text.x = element_blank()) +
-        ggtitle("Population Size: Education Level") +
+        ggtitle("Sample Size: Education Level") +
         ylab("Population") +
         xlab("Education Attainment: No Schooling (Left) to Doctorate Degree (Right)") 
 
